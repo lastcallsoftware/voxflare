@@ -5,7 +5,7 @@ import { ANGLE_SAMPLES, WARP_EXTENT, updateDisplacements } from '../src/displace
 
 test('image displacement uses the existing animation waves and closes the angular seam', () => {
   const field = new Float32Array(ANGLE_SAMPLES + 1);
-  const state = { amplitude: 0.8, energy: 1.2, phase: 4.7 };
+  const state = { amplitude: 0.8, energy: 1.2, phase: 4.7, time: 27, modePosition: 27 / 12 };
   updateDisplacements(field, state);
   for (let i = 0; i <= ANGLE_SAMPLES; i++) {
     const angle = i / ANGLE_SAMPLES * Math.PI * 2 - Math.PI;
@@ -17,8 +17,8 @@ test('image displacement uses the existing animation waves and closes the angula
 test('the padded image extent contains the full allowed deformation', () => {
   const field = new Float32Array(ANGLE_SAMPLES + 1);
   for (const energy of [0, 0.5, 1, 1.5]) {
-    for (let phase = 0; phase < 10; phase += 0.3) {
-      updateDisplacements(field, { amplitude: energy / 1.5, energy, phase });
+    for (let time = 0; time < 180; time += 3.7) {
+      updateDisplacements(field, { amplitude: energy / 1.5, energy, phase: time * 1.1, time, modePosition: time / 12 });
       assert.ok(field.every(value => 1 + value > 0 && 1 + value < WARP_EXTENT));
     }
   }

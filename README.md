@@ -26,6 +26,9 @@ The default **Manual test** mode needs no OBS connection. Raise **Test level**
 to simulate speech, then lower it to zero to see the gradual release back to
 idle. **Flow speed** changes the rate of motion; **Speech response** changes
 how strongly the perimeter responds. The meter shows the smoothed amplitude.
+**Mode transition** sets the approximate time to blend into the next deformation
+mode, from 1 to 15 seconds in half-second steps (default 4). Shorter times change modes faster.
+Adjusting it preserves the current shape and changes the blend rate going forward.
 
 For an automatic speech test, choose **Voice recording** and press **Play** in
 the audio player. A 27-second JFK speech clip from NASA is included. The avatar
@@ -126,11 +129,18 @@ Audio acquisition, animation state, and rendering are separate. The animation
 interpolates toward incoming audio targets every display frame using exponential
 smoothing: a 6 ms attack time constant and a 45 ms release time constant.
 These values give smooth transitions even though OBS meters arrive about every
-50 ms, while allowing short syllables and gaps to remain distinct. Two broad
-idle waves keep the shape moving slowly in silence. Two finer speech waves
-change their depth and phase with the audio level, so syllables sharply reshape
-the boundary. Flow also speeds up with audio intensity, then settles back to
-the slow idle motion when the speaker stops.
+50 ms, while allowing short syllables and gaps to remain distinct. Four related
+deformation modes blend broad idle waves with finer speech ripples. They
+crossfade over the selected Mode transition duration (4 seconds by default),
+with accumulated blend progress independent of audio levels and the Flow speed
+setting. Changing the duration does not reset that progress. Slow continuous
+drift also changes amplitude, harmonic mix, phase offsets, sector emphasis, and
+response strength; those parameters do not reset when a mode returns.
+
+All spatial frequencies remain whole-number harmonics so the perimeter closes
+seamlessly. Mode blends and parameter drift stay bounded and use no random
+samples. Speech still changes ripple depth and phase immediately. Flow speeds
+up with audio intensity, then settles back to slow idle motion when speech stops.
 The renderer samples that shared curve; pixels do not move independently.
 Audio changes local deformation and flow rather than scaling the entire avatar.
 
