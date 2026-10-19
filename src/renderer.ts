@@ -1,70 +1,160 @@
-import { boundaryRadius, type AnimationState } from './animation';
+import type { AnimationState } from './animation';
+import { ANGLE_SAMPLES, FIXED_CENTER_RADIUS, FULL_WARP_RADIUS, WARP_EXTENT, updateDisplacements } from './displacement';
 
-export class SphereRenderer {
+const VERTEX_SHADER = `#version 300 es
+in vec2 aPosition;
+uniform vec2 uScale;
+out vec2 vPosition;
+void main() {
+  vPosition = vec2(aPosition.x, -aPosition.y) * ${WARP_EXTENT};
+  gl_Position = vec4(aPosition * uScale, 0.0, 1.0);
+}`;
+
+const FRAGMENT_SHADER = `#version 300 es
+precision highp float;
+uniform sampler2D uArtwork;
+uniform sampler2D uDisplacements;
+in vec2 vPosition;
+out vec4 outColor;
+void main() {
+  float angle = atan(vPosition.y, vPosition.x);
+  float sampleIndex = (angle + 3.14159265359) / 6.28318530718 * ${ANGLE_SAMPLES}.0;
+  int bin = min(int(floor(sampleIndex)), ${ANGLE_SAMPLES - 1});
+  float a = texelFetch(uDisplacements, ivec2(bin, 0), 0).r;
+  float b = texelFetch(uDisplacements, ivec2(bin + 1, 0), 0).r;
+  float displacement = mix(a, b, sampleIndex - float(bin));
+  // The central plasma stays fixed; distortion grows smoothly toward the corona.
+  float weight = smoothstep(${FIXED_CENTER_RADIUS}, ${FULL_WARP_RADIUS}, length(vPosition));
+  vec2 sourceUV = (vPosition / (1.0 + displacement * weight) + 1.0) * 0.5;
+  if (any(lessThan(sourceUV, vec2(0.0))) || any(greaterThan(sourceUV, vec2(1.0)))) {
+    outColor = vec4(0.0);
+  } else {
+    // The texture is premultiplied before filtering to preserve soft transparent edges.
+    outColor = texture(uArtwork, sourceUV);
+    // Remove the baked dark matte from the outer glow without changing its color over black.
+    float outerGlow = smoothstep(0.72, 1.0, length(sourceUV * 2.0 - 1.0));
+    float glowAlpha = max(outColor.r, max(outColor.g, outColor.b));
+    outColor.a = mix(outColor.a, glowAlpha, outerGlow);
+  }
+}`;
+
+function compileShader(gl: WebGL2RenderingContext, type: number, source: string): WebGLShader {
+  const shader = gl.createShader(type);
+  if (!shader) throw new Error('Could not create an artwork shader.');
+  gl.shaderSource(shader, source);
+  gl.compileShader(shader);
+  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+    const message = gl.getShaderInfoLog(shader);
+    gl.deleteShader(shader);
+    throw new Error(`Artwork shader compilation failed: ${message}`);
+  }
+  return shader;
+}
+
+export class AvatarRenderer {
   private canvas: HTMLCanvasElement;
-  private context: CanvasRenderingContext2D;
+  private gl: WebGL2RenderingContext | undefined;
+  private program: WebGLProgram | undefined;
+  private artwork: WebGLTexture | undefined;
+  private displacementTexture: WebGLTexture | undefined;
+  private buffer: WebGLBuffer | undefined;
+  private scaleLocation: WebGLUniformLocation | null = null;
+  private field = new Float32Array(ANGLE_SAMPLES + 1);
   private width = 0;
   private height = 0;
-  private pixelRatio = 1;
+  private disposed = false;
 
   constructor(canvas: HTMLCanvasElement) {
-    const context = canvas.getContext('2d', { alpha: true });
-    if (!context) throw new Error('Canvas 2D is not supported.');
     this.canvas = canvas;
-    this.context = context;
+  }
+
+  async load(url: string): Promise<void> {
+    const image = new Image();
+    image.src = url;
+    await image.decode();
+    if (this.disposed) return;
+    const gl = this.canvas.getContext('webgl2', { alpha: true, premultipliedAlpha: true, antialias: false });
+    if (!gl) throw new Error('WebGL 2 is required to animate the original artwork.');
+    this.gl = gl;
+    const vertex = compileShader(gl, gl.VERTEX_SHADER, VERTEX_SHADER);
+    const fragment = compileShader(gl, gl.FRAGMENT_SHADER, FRAGMENT_SHADER);
+    const program = gl.createProgram();
+    if (!program) throw new Error('Could not create the artwork renderer.');
+    this.program = program;
+    gl.attachShader(program, vertex);
+    gl.attachShader(program, fragment);
+    gl.linkProgram(program);
+    gl.deleteShader(vertex);
+    gl.deleteShader(fragment);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      throw new Error(`Artwork shader linking failed: ${gl.getProgramInfoLog(program)}`);
+    }
+    gl.useProgram(program);
+    this.buffer = gl.createBuffer() ?? undefined;
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer ?? null);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+    const position = gl.getAttribLocation(program, 'aPosition');
+    gl.enableVertexAttribArray(position);
+    gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
+    this.scaleLocation = gl.getUniformLocation(program, 'uScale');
+
+    this.artwork = gl.createTexture() ?? undefined;
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.artwork ?? null);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.uniform1i(gl.getUniformLocation(program, 'uArtwork'), 0);
+
+    this.displacementTexture = gl.createTexture() ?? undefined;
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, this.displacementTexture ?? null);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, ANGLE_SAMPLES + 1, 1, 0, gl.RED, gl.FLOAT, this.field);
+    // Interpolate the float lookup explicitly; no optional float-filtering extension is needed.
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.uniform1i(gl.getUniformLocation(program, 'uDisplacements'), 1);
+    gl.clearColor(0, 0, 0, 0);
   }
 
   resize(width: number, height: number): void {
     this.width = width;
     this.height = height;
-    this.pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
-    this.canvas.width = Math.round(width * this.pixelRatio);
-    this.canvas.height = Math.round(height * this.pixelRatio);
+    const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+    this.canvas.width = Math.round(width * pixelRatio);
+    this.canvas.height = Math.round(height * pixelRatio);
   }
 
   draw(state: AnimationState): void {
-    const ctx = this.context;
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    if (!this.width || !this.height) return;
-    ctx.setTransform(this.pixelRatio, 0, 0, this.pixelRatio, 0, 0);
-    ctx.save();
-    ctx.translate(this.width / 2, this.height / 2);
-    const radius = Math.min(this.width, this.height) * 0.32;
-    const energy = state.energy;
-    const boundary = new Path2D();
+    const gl = this.gl;
+    if (!gl || !this.program || !this.width || !this.height || this.disposed) return;
+    gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.useProgram(this.program);
+    // Leave space around the original image for its displaced, feathered corona.
+    const halfSize = Math.min(this.width, this.height) * 0.34;
+    gl.uniform2f(this.scaleLocation, halfSize * WARP_EXTENT * 2 / this.width, halfSize * WARP_EXTENT * 2 / this.height);
+    updateDisplacements(this.field, state);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, this.displacementTexture ?? null);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, ANGLE_SAMPLES + 1, 1, gl.RED, gl.FLOAT, this.field);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.artwork ?? null);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  }
 
-    // These vertices sample four shared waves; no vertex has independent motion.
-    const samples = 144;
-    for (let i = 0; i < samples; i++) {
-      const angle = (i / samples) * Math.PI * 2;
-      const r = radius * boundaryRadius(angle, state);
-      const x = Math.cos(angle) * r;
-      const y = Math.sin(angle) * r;
-      if (i === 0) boundary.moveTo(x, y);
-      else boundary.lineTo(x, y);
-    }
-    boundary.closePath();
-
-    const interior = ctx.createRadialGradient(-radius * 0.12, -radius * 0.08, 0, 0, 0, radius * 1.15);
-    interior.addColorStop(0, `rgba(171, 92, 255, ${0.22 + energy * 0.14})`);
-    interior.addColorStop(0.55, `rgba(93, 35, 175, ${0.28 + energy * 0.16})`);
-    interior.addColorStop(0.86, `rgba(148, 37, 123, ${0.30 + energy * 0.12})`);
-    interior.addColorStop(1, 'rgba(231, 43, 70, 0.36)');
-    ctx.fillStyle = interior;
-    ctx.fill(boundary);
-
-    ctx.lineJoin = 'round';
-    ctx.shadowColor = '#ff243e';
-    ctx.shadowBlur = radius * (0.13 + energy * 0.04);
-    ctx.strokeStyle = `rgba(255, 35, 58, ${0.40 + energy * 0.12})`;
-    ctx.lineWidth = radius * (0.047 + energy * 0.014);
-    ctx.stroke(boundary);
-
-    ctx.shadowBlur = radius * 0.055;
-    ctx.strokeStyle = `rgba(255, 93, 109, ${0.70 + energy * 0.14})`;
-    ctx.lineWidth = radius * 0.012;
-    ctx.stroke(boundary);
-    ctx.restore();
+  dispose(): void {
+    this.disposed = true;
+    const gl = this.gl;
+    if (!gl) return;
+    gl.deleteTexture(this.artwork ?? null);
+    gl.deleteTexture(this.displacementTexture ?? null);
+    gl.deleteBuffer(this.buffer ?? null);
+    gl.deleteProgram(this.program ?? null);
   }
 }

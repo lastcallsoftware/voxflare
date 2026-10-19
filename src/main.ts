@@ -1,7 +1,7 @@
 import './style.css';
 import { ObsAudioInput } from './audio';
 import { AnimationEngine } from './animation';
-import { SphereRenderer } from './renderer';
+import { AvatarRenderer } from './renderer';
 import { RecordingInput } from './recording';
 
 function element<T extends HTMLElement>(selector: string): T {
@@ -11,7 +11,7 @@ function element<T extends HTMLElement>(selector: string): T {
 }
 
 const preview = element<HTMLElement>('#preview');
-const renderer = new SphereRenderer(element<HTMLCanvasElement>('#canvas'));
+const renderer = new AvatarRenderer(element<HTMLCanvasElement>('#canvas'));
 const engine = new AnimationEngine();
 const mode = element<HTMLSelectElement>('#mode');
 const manualLevel = element<HTMLInputElement>('#manual-level');
@@ -165,6 +165,15 @@ window.addEventListener('keydown', (event) => {
 });
 applyOverlay();
 
+const artworkStatus = element<HTMLElement>('#artwork-status');
+void renderer.load('/derived/avatar-transparent.png').then(() => {
+  artworkStatus.hidden = true;
+}).catch((error: unknown) => {
+  artworkStatus.textContent = 'Could not load the avatar. Check that WebGL 2 is enabled, then reload.';
+  renderer.dispose();
+  console.error(error);
+});
+
 const resizeObserver = new ResizeObserver(() => {
   renderer.resize(preview.clientWidth, preview.clientHeight);
 });
@@ -196,5 +205,6 @@ if (import.meta.hot) {
     resizeObserver.disconnect();
     audio.disconnect();
     recording.dispose();
+    renderer.dispose();
   });
 }

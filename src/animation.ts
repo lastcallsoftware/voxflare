@@ -29,6 +29,6 @@ export class AnimationEngine {
   update(dt: number, target: number, speed: number, response: number): void {
     this.state.amplitude = smoothAmplitude(this.state.amplitude, target, dt);
     this.state.energy = Math.min(1.5, this.state.amplitude * response);
-    this.state.phase += dt * speed * (0.55 + this.state.energy * 7);
+    this.state.phase += dt * speed * 2 * (0.55 + this.state.energy * 7);
   }
 }

@@ -1,11 +1,14 @@
 # VoxFlare
 
-A transparent, audio-reactive avatar built with Vite, vanilla strict TypeScript,
-and Canvas 2D. Phase 1 renders a procedural purple sphere with a glowing red
-boundary. It flows gently while idle and becomes more active with speech.
+A transparent, audio-reactive avatar built with Vite and vanilla strict
+TypeScript. Phase 2 animates the original purple plasma artwork and red corona
+using a small WebGL 2 radial-displacement renderer. It flows gently while idle
+and responds sharply to speech. OBS acquisition and audio controls are unchanged.
 
-The supplied `public/Avatar.png` is a visual reference only. Artwork integration
-and advanced rendering are deferred until this prototype is reviewed.
+The supplied `public/Avatar.png` stays unchanged. A separate alpha-masked image
+in `public/derived/` removes its dark surroundings while retaining its original
+pixel colors and texture. This is a first image-animation pass for visual review;
+particles and advanced lighting remain outside the scope.
 
 ## Getting started
 
@@ -103,11 +106,13 @@ src/
   audio.ts          OBS connection, source selection, and meter normalization
   recording.ts      Local audio-file playback analysis
   animation.ts      Audio envelope and continuous spatial waves
-  renderer.ts       Transparent Canvas 2D rendering
+  displacement.ts   Angular displacement field from the Phase 1 waves
+  renderer.ts       Transparent WebGL 2 image displacement
   main.ts           Controls, resizing, and requestAnimationFrame loop
   style.css         Development layout and transparent presentation mode
-tests/              Animation tests and mock OBS protocol checks
-public/Avatar.png   Reference artwork, not rendered in Phase 1
+tests/              Animation, image-displacement, and OBS protocol checks
+public/Avatar.png   Unmodified original artwork (capital A)
+public/derived/     Alpha matte and color-preserving transparent avatar
 public/voice-sample.mp3  Bundled NASA speech test recording
 public/voice-sample.txt  Recording source and usage information
 tsconfig.json       Strict TypeScript configuration
@@ -126,8 +131,47 @@ idle waves keep the shape moving slowly in silence. Two finer speech waves
 change their depth and phase with the audio level, so syllables sharply reshape
 the boundary. Flow also speeds up with audio intensity, then settles back to
 the slow idle motion when the speaker stops.
-The renderer samples that shared curve; the points do not move independently.
-Audio changes deformation, flow, and luminosity rather than scaling the sphere.
+The renderer samples that shared curve; pixels do not move independently.
+Audio changes local deformation and flow rather than scaling the entire avatar.
+
+### Image displacement
+
+The renderer uploads the 1254 × 1254 transparent artwork once. Each frame, the
+animation engine supplies 513 angular displacement values (including a duplicate
+endpoint) using the existing `boundaryRadius` function. A small shader interpolates
+that field and inverse-maps each output pixel into the original texture using
+its polar angle and radius. Inverse sampling avoids gaps and wedge seams.
+
+The central 30% of the image radius remains fixed. A smooth radial falloff
+increases the deformation until it reaches full strength at 80% of the radius,
+near the corona. Extra space around the image accommodates the animated glow.
+Texture filtering uses premultiplied alpha so soft edges blend correctly over
+the OBS scene. In the outer glow, alpha is reduced toward the strongest
+premultiplied color channel to remove the baked dark matte over light backgrounds;
+this leaves its color over black unchanged. The core is unaffected.
+No procedural substitute, new lighting, or particles are drawn.
+
+A Canvas 2D pixel-warp prototype measured approximately 18 ms per frame at
+512 × 512 and 35 ms at 768 × 768 in this WSL environment, before display overhead.
+That was too slow for a consistent 60 Hz target at useful image resolution, so
+the image warp uses WebGL 2. No graphics library or new npm dependency is needed.
+The browser/OBS Browser Source must have WebGL 2 available; a loading or failure
+message appears if the image or graphics context cannot initialize.
+
+### Derived artwork
+
+`public/derived/avatar-matte.png` is a background-removal result from the original
+image. Only its alpha channel is used in `avatar-transparent.png`; every RGB
+channel in the final image is copied unchanged from `public/Avatar.png`.
+The original is never overwritten. The derived image retains the corona's soft
+alpha boundary and a solid interior. To reproduce the color-preserving merge
+with FFmpeg (only needed for asset preparation, not development or builds):
+
+```sh
+ffmpeg -i public/Avatar.png -i public/derived/avatar-matte.png \
+  -filter_complex '[1:v]alphaextract[alpha];[0:v][alpha]alphamerge' \
+  -frames:v 1 public/derived/avatar-transparent.png
+```
 
 Recording mode uses the browser's Web Audio API to measure a short window of
 playback samples and send the peak amplitude through the same normalization and

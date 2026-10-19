@@ -20,7 +20,7 @@ test('flow stays slow in silence and speeds up during speech', () => {
     idle.update(1 / 60, 0, 1, 1);
     speech.update(1 / 60, 0.6, 1, 1);
   }
-  assert.ok(idle.state.phase < 0.6);
+  assert.ok(Math.abs(idle.state.phase - 1.1) < 1e-12);
   assert.ok(speech.state.phase > idle.state.phase * 7);
 });
 
