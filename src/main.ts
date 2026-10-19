@@ -31,6 +31,7 @@ const refresh = element<HTMLButtonElement>('#refresh-sources');
 const status = element<HTMLElement>('#connection-status');
 const previewStatus = element<HTMLElement>('#preview-status');
 const speed = element<HTMLInputElement>('#motion-speed');
+const transition = element<HTMLInputElement>('#mode-transition');
 const response = element<HTMLInputElement>('#speech-response');
 const meter = element<HTMLMeterElement>('#audio-meter');
 const audioValue = element<HTMLOutputElement>('#audio-value');
@@ -138,6 +139,9 @@ manualLevel.addEventListener('input', () => {
 speed.addEventListener('input', () => {
   element<HTMLOutputElement>('#speed-value').value = `${Number(speed.value).toFixed(1)}×`;
 });
+transition.addEventListener('input', () => {
+  element<HTMLOutputElement>('#transition-value').value = `${transition.value} s`;
+});
 response.addEventListener('input', () => {
   element<HTMLOutputElement>('#response-value').value = `${Number(response.value).toFixed(1)}×`;
 });
@@ -187,7 +191,7 @@ function frame(now: number): void {
   previousTime = now;
   const level = mode.value === 'manual' ? Number(manualLevel.value) :
     mode.value === 'recording' ? recording.readLevel() : audio.readLevel(now);
-  engine.update(dt, level, Number(speed.value), Number(response.value));
+  engine.update(dt, level, Number(speed.value), Number(response.value), Number(transition.value));
   renderer.draw(engine.state);
   if (now - lastMeterUpdate >= 100) {
     meter.value = engine.state.amplitude;

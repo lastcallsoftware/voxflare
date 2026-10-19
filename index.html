@@ -54,6 +54,9 @@
           <div class="section-heading"><h2>Motion</h2><span class="section-number">02</span></div>
           <div class="range-label"><label for="motion-speed">Flow speed</label><output id="speed-value" for="motion-speed">1.0×</output></div>
           <input id="motion-speed" type="range" min="0.2" max="2" step="0.1" value="1" />
+          <div class="range-label"><label for="mode-transition">Mode transition</label><output id="transition-value" for="mode-transition">4 s</output></div>
+          <input id="mode-transition" type="range" min="1" max="15" step="0.5" value="4" aria-describedby="transition-help" />
+          <p id="transition-help" class="help">Time to blend into the next shape. Lower values change modes faster.</p>
           <div class="range-label"><label for="speech-response">Speech response</label><output id="response-value" for="speech-response">1.0×</output></div>
           <input id="speech-response" type="range" min="0" max="2" step="0.1" value="1" />
           <p class="help">A gentle idle flow, with more energy as the audio rises.</p>
