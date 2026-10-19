@@ -1,0 +1,16 @@
+VoxFlare speech test sample
+
+Recording: JFK — We Choose the Moon
+Speaker: President John F. Kennedy
+Source: NASA Historical Sounds
+https://www.nasa.gov/historical-sounds/
+
+Original audio, copied unchanged:
+https://www.nasa.gov/wp-content/uploads/2015/01/586447main_JFKwechoosemoonspeech.mp3
+
+NASA media usage guidelines:
+https://www.nasa.gov/nasa-brand-center/images-and-media/
+
+Included for local audio-reactivity testing. Credit: NASA.
+NASA generally makes its audio available for informational use under the linked
+guidelines. Inclusion does not imply endorsement by NASA or the speaker.

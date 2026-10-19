@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VoxFlare</title>
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="brand"><span class="brand-mark" aria-hidden="true">◉</span> VoxFlare</div>
+      <span class="phase-label">Phase 01 <span>Audio-reactive prototype</span></span>
+      <button id="overlay" type="button" class="quiet-button">Presentation mode <span aria-hidden="true">↗</span></button>
+    </header>
+    <main class="workspace">
+      <section id="preview" class="preview" aria-label="Avatar preview">
+        <div class="preview-heading"><span class="eyebrow">Live preview</span><span id="preview-status">Manual test</span></div>
+        <canvas id="canvas" aria-label="Glowing purple sphere with an animated red corona"></canvas>
+        <div class="preview-caption"><span>Voice into light.</span><small>Procedural study / 01</small></div>
+      </section>
+      <aside class="panel" aria-label="Avatar settings">
+        <section class="panel-section">
+          <div class="section-heading"><h1>Audio input</h1><span class="section-number">01</span></div>
+          <label for="mode">Input mode</label>
+          <select id="mode"><option value="manual">Manual test</option><option value="recording">Voice recording</option><option value="obs">OBS WebSocket</option></select>
+          <div id="manual-controls">
+            <div class="range-label"><label for="manual-level">Test level</label><output id="manual-value" for="manual-level">0%</output></div>
+            <input id="manual-level" type="range" min="0" max="1" step="0.01" value="0" />
+            <p class="help">Raise the level to simulate speech. Set it to zero to see the idle motion.</p>
+          </div>
+          <div id="recording-controls" hidden>
+            <audio id="recording" controls preload="metadata" src="/voice-sample.mp3" aria-label="Voice recording playback"></audio>
+            <p id="recording-status" class="connection-status" role="status">Sample ready. Press Play to test.</p>
+            <label for="recording-file">Or choose your own recording</label>
+            <input id="recording-file" type="file" accept="audio/*" />
+            <button id="load-sample" type="button" class="text-button">Use sample recording</button>
+            <p class="help">Sample: JFK's “We choose the Moon” speech, courtesy of <a href="https://www.nasa.gov/historical-sounds/" target="_blank" rel="noreferrer">NASA</a>. Your files play locally and are never uploaded.</p>
+          </div>
+          <form id="obs-controls" hidden autocomplete="off">
+            <label for="obs-address">WebSocket address</label>
+            <input id="obs-address" type="text" value="ws://127.0.0.1:4455" spellcheck="false" autocomplete="off" required aria-describedby="connection-help" />
+            <label for="obs-password">Server password</label>
+            <input id="obs-password" type="password" autocomplete="off" />
+            <div class="button-row"><button id="connect" type="submit" class="primary-button">Connect to OBS</button><button id="disconnect" type="button" disabled>Disconnect</button></div>
+            <p id="connection-status" class="connection-status" role="status">Disconnected</p>
+            <div class="range-label"><label for="obs-source">Audio source</label><button id="refresh-sources" type="button" class="text-button" disabled>Refresh</button></div>
+            <select id="obs-source" disabled><option value="">Connect to load sources</option></select>
+            <p id="connection-help" class="help">Select an active audio input. Settings stay in this page until reload; the password is never saved.</p>
+          </form>
+          <div class="level-heading"><label for="audio-meter">Smoothed level</label><output id="audio-value">0%</output></div>
+          <meter id="audio-meter" min="0" max="1" value="0">0%</meter>
+        </section>
+        <section class="panel-section">
+          <div class="section-heading"><h2>Motion</h2><span class="section-number">02</span></div>
+          <div class="range-label"><label for="motion-speed">Flow speed</label><output id="speed-value" for="motion-speed">1.0×</output></div>
+          <input id="motion-speed" type="range" min="0.2" max="2" step="0.1" value="1" />
+          <div class="range-label"><label for="speech-response">Speech response</label><output id="response-value" for="speech-response">1.0×</output></div>
+          <input id="speech-response" type="range" min="0" max="2" step="0.1" value="1" />
+          <p class="help">A gentle idle flow, with more energy as the audio rises.</p>
+        </section>
+        <footer class="panel-footer"><span class="status-dot" aria-hidden="true"></span> Ready for a voice.<small>Press Esc to toggle presentation mode.</small></footer>
+      </aside>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
