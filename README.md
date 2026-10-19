@@ -30,6 +30,11 @@ how strongly the perimeter responds. The meter shows the smoothed amplitude.
 **Mode transition** sets the approximate time to blend into the next deformation
 mode, from 1 to 15 seconds in half-second steps (default 4). Shorter times change modes faster.
 Adjusting it preserves the current shape and changes the blend rate going forward.
+**Interior breathing** sets the texture's scale oscillation from 0 to ±12%
+(default ±6%, on an 8-second cycle). **Interior rotation** sets its slow sway
+from 0 to ±15° (default ±8°, on a 14-second cycle). Both use half-unit steps.
+Set either to zero to disable
+that effect. Both continue independently of audio and Flow speed.
 
 For an automatic speech test, choose **Voice recording** and press **Play** in
 the audio player. A 27-second JFK speech clip from NASA is included. The avatar
@@ -59,6 +64,15 @@ If Windows cannot reach the WSL development server, run
 4. Speak or play audio through that OBS source. VoxFlare only reads levels; it
    does not capture a microphone, route audio, or change OBS settings.
 
+**OBS sensitivity** boosts the normalized OBS level before animation smoothing,
+from 0.5× to 30× (default 6×). It changes both motion and illumination, without
+changing audible volume or OBS's mixer settings. Adjust it until ordinary speech
+moves VoxFlare's smoothed meter through roughly 30–80%. Reduce it if the meter
+stays at 100%, which flattens the response between syllables. The existing noise
+floor still suppresses very low levels; silence and muted output remain idle.
+Manual test and voice recordings keep their existing level scale. **Speech
+response** remains a separate control for deformation strength.
+
 The WebSocket address is resolved by the browser running the page. For a Windows
 browser or OBS Browser Source, `127.0.0.1` means Windows, even though Vite runs
 in WSL. A browser running inside WSL may need the Windows host's reachable IP
@@ -81,12 +95,35 @@ show the settings. Connect and select a source, then click **Presentation mode**
 or press **Esc** again. Switching modes in the same page preserves the connection.
 Settings in a separate browser tab do not configure the OBS Browser Source.
 
+Input mode and audio source use inline selection lists. Their options are drawn
+inside the page rather than in native dropdown popups, which can fail to appear
+in OBS's Interact window. Click an option, or focus the list and use the arrow
+keys. The audio source list scrolls when needed.
+
 All settings and credentials are held in memory only. The password field is
 cleared after a successful connection. Nothing is saved to browser storage or
 placed in URL parameters; only `overlay=1` is used in the URL. Reloading the
 page, refreshing the Browser Source, or shutting it down requires configuration
 again. Leave OBS's **Shutdown source when not visible** option off if you want
 to keep the connection while switching scenes.
+
+## Performance visibility
+
+The settings panel shows frame rate and average/peak animation-loop work time,
+updated once per second. Frame work includes audio sampling, animation updates,
+WebGL command submission, and the audio meter update. It is elapsed time, not
+CPU utilization, and excludes GPU execution, browser compositing, and work outside
+the animation callback. Statistics reset when tab visibility changes and are
+hidden in presentation mode. Sampling uses two clock reads per frame with no GPU
+synchronization, pixel readback, or new dependencies.
+
+For CPU usage while testing in Chrome, open DevTools, press **Ctrl+Shift+P**, and
+run **Show Performance monitor**. Its CPU chart provides broader visibility than
+the in-app timings; see [Chrome's Performance monitor documentation](https://developer.chrome.com/docs/devtools/performance-monitor).
+For the actual Windows OBS setup, compare Task Manager CPU/GPU readings with the
+Browser Source active and fully shut down, keeping the rest of the scene stable.
+Simply hiding the source may leave it running unless **Shutdown source when not
+visible** is enabled. WSL browser measurements do not predict Windows OBS usage.
 
 ## Scripts
 
@@ -153,7 +190,7 @@ endpoint) using the existing `boundaryRadius` function. A small shader interpola
 that field and inverse-maps each output pixel into the original texture using
 its polar angle and radius. Inverse sampling avoids gaps and wedge seams.
 
-The central 30% of the image radius remains fixed. A smooth radial falloff
+Perimeter deformation leaves the central 30% of the image radius fixed. A smooth radial falloff
 increases the deformation until it reaches full strength at 80% of the radius,
 near the corona. Extra space around the image accommodates the animated glow.
 Texture filtering uses premultiplied alpha so soft edges blend correctly over
@@ -161,6 +198,14 @@ the OBS scene. In the outer glow, alpha is reduced toward the strongest
 premultiplied color channel to remove the baked dark matte over light backgrounds;
 this leaves its color over black unchanged. This alpha correction leaves the
 core unaffected. No procedural substitute or particles are drawn.
+
+Interior breathing and rotation use elapsed time independently of the perimeter
+phase. Their inverse transform is calculated once per frame and applied to the
+existing texture coordinates. A smooth radial blend fades it out between 25%
+and 72% of the original image radius, leaving the outer corona unchanged and
+avoiding a hard seam. The existing shader still takes one artwork sample per
+pixel, with no extra render pass, image processing, or texture upload. Lighting
+continues to follow the sampled artwork colors.
 
 ### Audio-reactive illumination
 

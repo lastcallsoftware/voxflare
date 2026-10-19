@@ -22,7 +22,8 @@
         <section class="panel-section">
           <div class="section-heading"><h1>Audio input</h1><span class="section-number">01</span></div>
           <label for="mode">Input mode</label>
-          <select id="mode"><option value="manual">Manual test</option><option value="recording">Voice recording</option><option value="obs">OBS WebSocket</option></select>
+          <!-- Inline lists avoid native dropdown popups, which may not render in OBS Interact. -->
+          <select id="mode" size="3"><option value="manual" selected>Manual test</option><option value="recording">Voice recording</option><option value="obs">OBS WebSocket</option></select>
           <div id="manual-controls">
             <div class="range-label"><label for="manual-level">Test level</label><output id="manual-value" for="manual-level">0%</output></div>
             <input id="manual-level" type="range" min="0" max="1" step="0.01" value="0" />
@@ -44,7 +45,10 @@
             <div class="button-row"><button id="connect" type="submit" class="primary-button">Connect to OBS</button><button id="disconnect" type="button" disabled>Disconnect</button></div>
             <p id="connection-status" class="connection-status" role="status">Disconnected</p>
             <div class="range-label"><label for="obs-source">Audio source</label><button id="refresh-sources" type="button" class="text-button" disabled>Refresh</button></div>
-            <select id="obs-source" disabled><option value="">Connect to load sources</option></select>
+            <select id="obs-source" size="6" disabled><option value="">Connect to load sources</option></select>
+            <div class="range-label"><label for="obs-sensitivity">OBS sensitivity</label><output id="sensitivity-value" for="obs-sensitivity">6.0×</output></div>
+            <input id="obs-sensitivity" type="range" min="0.5" max="30" step="0.5" value="6" aria-describedby="sensitivity-help" />
+            <p id="sensitivity-help" class="help">Boost the avatar's response without changing playback volume. Aim for speech to move the smoothed level through roughly 30–80%. Lower sensitivity if it stays at 100%.</p>
             <p id="connection-help" class="help">Select an active audio input. Settings stay in this page until reload; the password is never saved.</p>
           </form>
           <div class="level-heading"><label for="audio-meter">Smoothed level</label><output id="audio-value">0%</output></div>
@@ -60,6 +64,21 @@
           <div class="range-label"><label for="speech-response">Speech response</label><output id="response-value" for="speech-response">1.0×</output></div>
           <input id="speech-response" type="range" min="0" max="2" step="0.1" value="1" />
           <p class="help">A gentle idle flow, with more energy as the audio rises.</p>
+          <div class="range-label"><label for="interior-breathing">Interior breathing</label><output id="breathing-value" for="interior-breathing">±6.0%</output></div>
+          <input id="interior-breathing" type="range" min="0" max="12" step="0.5" value="6" aria-describedby="interior-help" />
+          <div class="range-label"><label for="interior-rotation">Interior rotation</label><output id="rotation-value" for="interior-rotation">±8.0°</output></div>
+          <input id="interior-rotation" type="range" min="0" max="15" step="0.5" value="8" aria-describedby="interior-help" />
+          <p id="interior-help" class="help">Slow texture movement, independent of speech and flow speed. Set either effect to zero to disable it.</p>
+        </section>
+        <section class="panel-section" aria-labelledby="performance-heading">
+          <div class="section-heading"><h2 id="performance-heading">Performance</h2><span class="section-number">03</span></div>
+          <dl class="performance-stats">
+            <div><dt>Frame rate</dt><dd id="frame-rate">—</dd></div>
+            <div><dt>Frame work · average</dt><dd id="average-work">—</dd></div>
+            <div><dt>Frame work · peak</dt><dd id="peak-work">—</dd></div>
+          </dl>
+          <p class="help">Updated every second. Frame work measures this animation loop, excluding GPU execution and other browser work. It is not a CPU percentage.</p>
+          <p class="help">For CPU usage, open Chrome DevTools → Performance monitor. In OBS, compare Windows Task Manager readings with this Browser Source active and shut down.</p>
         </section>
         <footer class="panel-footer"><span class="status-dot" aria-hidden="true"></span> Ready for a voice.<small>Press Esc to toggle presentation mode.</small></footer>
       </aside>

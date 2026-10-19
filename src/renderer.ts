@@ -15,6 +15,7 @@ precision highp float;
 uniform sampler2D uArtwork;
 uniform sampler2D uDisplacements;
 uniform float uAmplitude;
+uniform vec2 uInteriorTransform;
 in vec2 vPosition;
 out vec4 outColor;
 void main() {
@@ -24,9 +25,16 @@ void main() {
   float a = texelFetch(uDisplacements, ivec2(bin, 0), 0).r;
   float b = texelFetch(uDisplacements, ivec2(bin + 1, 0), 0).r;
   float displacement = mix(a, b, sampleIndex - float(bin));
-  // The central plasma stays fixed; distortion grows smoothly toward the corona.
+  // Perimeter distortion leaves the center fixed and grows smoothly toward the corona.
   float weight = smoothstep(${FIXED_CENTER_RADIUS}, ${FULL_WARP_RADIUS}, length(vPosition));
-  vec2 sourceUV = (vPosition / (1.0 + displacement * weight) + 1.0) * 0.5;
+  vec2 sourcePosition = vPosition / (1.0 + displacement * weight);
+  // Fade the interior's inverse scale/rotation to identity before the outer corona.
+  float interiorWeight = 1.0 - smoothstep(0.25, 0.72, length(sourcePosition));
+  vec2 interiorPosition = vec2(
+    uInteriorTransform.x * sourcePosition.x - uInteriorTransform.y * sourcePosition.y,
+    uInteriorTransform.y * sourcePosition.x + uInteriorTransform.x * sourcePosition.y
+  );
+  vec2 sourceUV = (mix(sourcePosition, interiorPosition, interiorWeight) + 1.0) * 0.5;
   if (any(lessThan(sourceUV, vec2(0.0))) || any(greaterThan(sourceUV, vec2(1.0)))) {
     outColor = vec4(0.0);
   } else {
@@ -76,6 +84,7 @@ export class AvatarRenderer {
   private buffer: WebGLBuffer | undefined;
   private scaleLocation: WebGLUniformLocation | null = null;
   private amplitudeLocation: WebGLUniformLocation | null = null;
+  private interiorTransformLocation: WebGLUniformLocation | null = null;
   private field = new Float32Array(ANGLE_SAMPLES + 1);
   private width = 0;
   private height = 0;
@@ -115,6 +124,7 @@ export class AvatarRenderer {
     gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
     this.scaleLocation = gl.getUniformLocation(program, 'uScale');
     this.amplitudeLocation = gl.getUniformLocation(program, 'uAmplitude');
+    this.interiorTransformLocation = gl.getUniformLocation(program, 'uInteriorTransform');
 
     this.artwork = gl.createTexture() ?? undefined;
     gl.activeTexture(gl.TEXTURE0);
@@ -148,7 +158,7 @@ export class AvatarRenderer {
     this.canvas.height = Math.round(height * pixelRatio);
   }
 
-  draw(state: AnimationState): void {
+  draw(state: AnimationState, breathingPercent = 6, rotationDegrees = 8): void {
     const gl = this.gl;
     if (!gl || !this.program || !this.width || !this.height || this.disposed) return;
     gl.viewport(0, 0, this.canvas.width, this.canvas.height);
@@ -158,6 +168,11 @@ export class AvatarRenderer {
     const halfSize = Math.min(this.width, this.height) * 0.34;
     gl.uniform2f(this.scaleLocation, halfSize * WARP_EXTENT * 2 / this.width, halfSize * WARP_EXTENT * 2 / this.height);
     gl.uniform1f(this.amplitudeLocation, state.amplitude);
+    // Independent slow cycles use elapsed time, never the audio-driven perimeter phase.
+    // Compute trigonometry once per frame; the shader still samples the artwork only once.
+    const scale = 1 + breathingPercent / 100 * Math.sin(state.time * Math.PI * 2 / 8);
+    const rotation = -rotationDegrees * Math.PI / 180 * Math.sin(state.time * Math.PI * 2 / 14);
+    gl.uniform2f(this.interiorTransformLocation, Math.cos(rotation) / scale, Math.sin(rotation) / scale);
     updateDisplacements(this.field, state);
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, this.displacementTexture ?? null);

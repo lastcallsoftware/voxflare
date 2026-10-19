@@ -52,6 +52,8 @@ h1, h2 { font-size: 15px; font-weight: 500; margin: 0; }
 .section-number { color: #aa8397; font-family: monospace; font-size: 11px; }
 label { display: block; font-size: 12px; color: #c5bdc9; margin-bottom: 9px; }
 select, input[type='text'], input[type='password'] { display: block; width: 100%; padding: 8px 10px; font-size: 12px; margin-bottom: 20px; }
+select[size] { padding: 4px; }
+select[size] option { padding: 9px 8px; border-radius: 3px; }
 input[type='range'] { display: block; width: 100%; margin: 8px 0 22px; accent-color: var(--accent); cursor: pointer; }
 .range-label, .level-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .range-label label, .level-heading label { margin: 0; }
@@ -71,6 +73,10 @@ meter::-webkit-meter-bar { background: #342838; border: 0; height: 8px; }
 meter::-webkit-meter-optimum-value { background: var(--accent); }
 meter::-moz-meter-bar { background: var(--accent); }
 .panel-footer { padding: 24px; font-size: 12px; color: #d3c1d1; }
+.performance-stats { margin: 0 0 20px; font-size: 12px; }
+.performance-stats > div { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.performance-stats dt { color: #c5bdc9; }
+.performance-stats dd { margin: 0; color: var(--accent); font-variant-numeric: tabular-nums; }
 .status-dot { display: inline-block; height: 5px; width: 5px; background: var(--accent); border-radius: 50%; vertical-align: middle; margin-right: 7px; }
 .panel-footer small { display: block; margin-top: 12px; color: var(--muted); font-size: 11px; line-height: 1.6; }
 

@@ -28,13 +28,19 @@ const connect = element<HTMLButtonElement>('#connect');
 const disconnect = element<HTMLButtonElement>('#disconnect');
 const sources = element<HTMLSelectElement>('#obs-source');
 const refresh = element<HTMLButtonElement>('#refresh-sources');
+const sensitivity = element<HTMLInputElement>('#obs-sensitivity');
 const status = element<HTMLElement>('#connection-status');
 const previewStatus = element<HTMLElement>('#preview-status');
 const speed = element<HTMLInputElement>('#motion-speed');
 const transition = element<HTMLInputElement>('#mode-transition');
 const response = element<HTMLInputElement>('#speech-response');
+const breathing = element<HTMLInputElement>('#interior-breathing');
+const rotation = element<HTMLInputElement>('#interior-rotation');
 const meter = element<HTMLMeterElement>('#audio-meter');
 const audioValue = element<HTMLOutputElement>('#audio-value');
+const frameRate = element<HTMLElement>('#frame-rate');
+const averageWork = element<HTMLElement>('#average-work');
+const peakWork = element<HTMLElement>('#peak-work');
 
 const audio = new ObsAudioInput((state, message) => {
   const busy = state === 'connecting';
@@ -136,6 +142,9 @@ refresh.addEventListener('click', async () => {
 manualLevel.addEventListener('input', () => {
   element<HTMLOutputElement>('#manual-value').value = `${Math.round(Number(manualLevel.value) * 100)}%`;
 });
+sensitivity.addEventListener('input', () => {
+  element<HTMLOutputElement>('#sensitivity-value').value = `${Number(sensitivity.value).toFixed(1)}×`;
+});
 speed.addEventListener('input', () => {
   element<HTMLOutputElement>('#speed-value').value = `${Number(speed.value).toFixed(1)}×`;
 });
@@ -144,6 +153,12 @@ transition.addEventListener('input', () => {
 });
 response.addEventListener('input', () => {
   element<HTMLOutputElement>('#response-value').value = `${Number(response.value).toFixed(1)}×`;
+});
+breathing.addEventListener('input', () => {
+  element<HTMLOutputElement>('#breathing-value').value = `±${Number(breathing.value).toFixed(1)}%`;
+});
+rotation.addEventListener('input', () => {
+  element<HTMLOutputElement>('#rotation-value').value = `±${Number(rotation.value).toFixed(1)}°`;
 });
 
 let overlay = new URLSearchParams(window.location.search).get('overlay') === '1';
@@ -186,17 +201,52 @@ resizeObserver.observe(preview);
 let previousTime = performance.now();
 let lastMeterUpdate = 0;
 let frameId = 0;
+let sampleStarted = performance.now();
+let sampleFrames = 0;
+let sampleWork = 0;
+let samplePeak = 0;
+function resetPerformanceSample(): void {
+  sampleStarted = performance.now();
+  sampleFrames = 0;
+  sampleWork = 0;
+  samplePeak = 0;
+  frameRate.textContent = averageWork.textContent = peakWork.textContent = '—';
+}
+// Do not count a background tab's suspended animation as a performance slowdown.
+document.addEventListener('visibilitychange', resetPerformanceSample);
 function frame(now: number): void {
+  const workStarted = performance.now();
   const dt = Math.min((now - previousTime) / 1000, 0.1);
   previousTime = now;
+  // Calibrate OBS independently of the full-scale manual control and bundled recording.
+  // The animation envelope clamps the amplified target before smoothing motion and lighting.
   const level = mode.value === 'manual' ? Number(manualLevel.value) :
-    mode.value === 'recording' ? recording.readLevel() : audio.readLevel(now);
+    mode.value === 'recording' ? recording.readLevel() : audio.readLevel(now) * Number(sensitivity.value);
   engine.update(dt, level, Number(speed.value), Number(response.value), Number(transition.value));
-  renderer.draw(engine.state);
+  renderer.draw(engine.state, Number(breathing.value), Number(rotation.value));
   if (now - lastMeterUpdate >= 100) {
     meter.value = engine.state.amplitude;
     audioValue.value = `${Math.round(engine.state.amplitude * 100)}%`;
     lastMeterUpdate = now;
+  }
+  // Wall-clock time for this callback, including WebGL submission but not GPU execution.
+  // Average over one second without forcing GPU synchronization or reading pixels back.
+  const workFinished = performance.now();
+  const work = workFinished - workStarted;
+  sampleFrames++;
+  sampleWork += work;
+  samplePeak = Math.max(samplePeak, work);
+  const elapsed = workFinished - sampleStarted;
+  if (elapsed >= 1000) {
+    if (!overlay) {
+      frameRate.textContent = `${(sampleFrames * 1000 / elapsed).toFixed(1)} fps`;
+      averageWork.textContent = `${(sampleWork / sampleFrames).toFixed(2)} ms`;
+      peakWork.textContent = `${samplePeak.toFixed(2)} ms`;
+    }
+    sampleStarted = workFinished;
+    sampleFrames = 0;
+    sampleWork = 0;
+    samplePeak = 0;
   }
   frameId = requestAnimationFrame(frame);
 }
@@ -207,6 +257,7 @@ if (import.meta.hot) {
   import.meta.hot.dispose(() => {
     cancelAnimationFrame(frameId);
     resizeObserver.disconnect();
+    document.removeEventListener('visibilitychange', resetPerformanceSample);
     audio.disconnect();
     recording.dispose();
     renderer.dispose();
