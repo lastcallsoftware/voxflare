@@ -14,6 +14,7 @@ const FRAGMENT_SHADER = `#version 300 es
 precision highp float;
 uniform sampler2D uArtwork;
 uniform sampler2D uDisplacements;
+uniform float uAmplitude;
 in vec2 vPosition;
 out vec4 outColor;
 void main() {
@@ -31,10 +32,25 @@ void main() {
   } else {
     // The texture is premultiplied before filtering to preserve soft transparent edges.
     outColor = texture(uArtwork, sourceUV);
+    float radius = length(sourceUV * 2.0 - 1.0);
+    float peak = max(outColor.r, max(outColor.g, outColor.b));
+    vec3 color = outColor.rgb / max(peak, 0.0001);
+    // Masks follow the displaced artwork and select its existing purple and red regions.
+    float purple = smoothstep(-0.12, 0.18, color.b - color.r)
+      * smoothstep(0.05, 0.3, min(color.r, color.b) - color.g)
+      * (1.0 - smoothstep(0.55, 0.85, radius));
+    float corona = smoothstep(0.12, 0.5, color.r - color.b)
+      * smoothstep(0.5, 0.8, radius);
+    // Ordinary speech is visible too; the curved corona response still accents loud syllables.
+    float illumination = 1.1 * uAmplitude * purple
+      + 3.0 * (0.65 * uAmplitude + 0.35 * uAmplitude * uAmplitude) * corona;
+    // Scale channels together to retain hue; a soft highlight limit avoids clipping filaments.
+    outColor.rgb *= (1.0 + illumination) / (1.0 + illumination * peak);
     // Remove the baked dark matte from the outer glow without changing its color over black.
-    float outerGlow = smoothstep(0.72, 1.0, length(sourceUV * 2.0 - 1.0));
+    float outerGlow = smoothstep(0.72, 1.0, radius);
     float glowAlpha = max(outColor.r, max(outColor.g, outColor.b));
-    outColor.a = mix(outColor.a, glowAlpha, outerGlow);
+    // Keep the illuminated glow premultiplied, including its feathered transparent edges.
+    outColor.a = mix(max(outColor.a, glowAlpha), glowAlpha, outerGlow);
   }
 }`;
 
@@ -59,6 +75,7 @@ export class AvatarRenderer {
   private displacementTexture: WebGLTexture | undefined;
   private buffer: WebGLBuffer | undefined;
   private scaleLocation: WebGLUniformLocation | null = null;
+  private amplitudeLocation: WebGLUniformLocation | null = null;
   private field = new Float32Array(ANGLE_SAMPLES + 1);
   private width = 0;
   private height = 0;
@@ -97,6 +114,7 @@ export class AvatarRenderer {
     gl.enableVertexAttribArray(position);
     gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
     this.scaleLocation = gl.getUniformLocation(program, 'uScale');
+    this.amplitudeLocation = gl.getUniformLocation(program, 'uAmplitude');
 
     this.artwork = gl.createTexture() ?? undefined;
     gl.activeTexture(gl.TEXTURE0);
@@ -139,6 +157,7 @@ export class AvatarRenderer {
     // Leave space around the original image for its displaced, feathered corona.
     const halfSize = Math.min(this.width, this.height) * 0.34;
     gl.uniform2f(this.scaleLocation, halfSize * WARP_EXTENT * 2 / this.width, halfSize * WARP_EXTENT * 2 / this.height);
+    gl.uniform1f(this.amplitudeLocation, state.amplitude);
     updateDisplacements(this.field, state);
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, this.displacementTexture ?? null);

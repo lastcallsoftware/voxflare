@@ -3,7 +3,8 @@
 A transparent, audio-reactive avatar built with Vite and vanilla strict
 TypeScript. Phase 2 animates the original purple plasma artwork and red corona
 using a small WebGL 2 radial-displacement renderer. It flows gently while idle
-and responds sharply to speech. OBS acquisition and audio controls are unchanged.
+and responds sharply to speech with local deformation and illumination.
+OBS acquisition and audio controls are unchanged.
 
 The supplied `public/Avatar.png` stays unchanged. A separate alpha-masked image
 in `public/derived/` removes its dark surroundings while retaining its original
@@ -158,8 +159,19 @@ near the corona. Extra space around the image accommodates the animated glow.
 Texture filtering uses premultiplied alpha so soft edges blend correctly over
 the OBS scene. In the outer glow, alpha is reduced toward the strongest
 premultiplied color channel to remove the baked dark matte over light backgrounds;
-this leaves its color over black unchanged. The core is unaffected.
-No procedural substitute, new lighting, or particles are drawn.
+this leaves its color over black unchanged. This alpha correction leaves the
+core unaffected. No procedural substitute or particles are drawn.
+
+### Audio-reactive illumination
+
+The same smoothed audio amplitude brightens the purple interior. The red corona
+gets a stronger lift at ordinary speech levels, with extra emphasis on loud syllables.
+Soft color and radial masks follow the displaced artwork, so illumination stays
+localized rather than brightening the whole image. All color channels at each
+pixel scale together to preserve hue, with a soft highlight limit that avoids
+clipping bright filaments. Silence restores the original brightness. This
+works with OBS, the manual level, and voice recordings independently of the
+Speech response setting, which controls deformation.
 
 A Canvas 2D pixel-warp prototype measured approximately 18 ms per frame at
 512 × 512 and 35 ms at 768 × 768 in this WSL environment, before display overhead.
