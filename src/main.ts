@@ -185,13 +185,49 @@ window.addEventListener('keydown', (event) => {
 applyOverlay();
 
 const artworkStatus = element<HTMLElement>('#artwork-status');
-void renderer.load('/derived/avatar-transparent.png').then(() => {
-  artworkStatus.hidden = true;
-}).catch((error: unknown) => {
-  artworkStatus.textContent = 'Could not load the avatar. Check that WebGL 2 is enabled, then reload.';
-  renderer.dispose();
-  console.error(error);
-});
+const avatars = {
+  plasma: { url: '/derived/avatar-transparent.png', name: 'Plasma', caption: 'Original plasma artwork', description: 'Original plasma avatar with an audio-reactive red corona' },
+  chatgpt: { url: '/derived/chatgpt.svg', name: 'ChatGPT', caption: 'ChatGPT / Black & white', description: 'White ChatGPT symbol with an audio-reactive perimeter' },
+  claude: { url: '/derived/claude.svg', name: 'Claude', caption: 'Claude / Starburst', description: 'Orange Claude starburst with an audio-reactive perimeter' },
+};
+let activeAvatar: keyof typeof avatars = 'plasma';
+let avatarRequest = 0;
+
+async function selectAvatar(value: string): Promise<void> {
+  const id = value === 'chatgpt' || value === 'claude' ? value : 'plasma';
+  const avatar = avatars[id];
+  const request = ++avatarRequest;
+  artworkStatus.textContent = `Loading ${avatar.name}…`;
+  artworkStatus.hidden = false;
+  try {
+    if (!await renderer.load(avatar.url, id === 'plasma')) return;
+    activeAvatar = id;
+    element<HTMLInputElement>(`input[name="avatar"][value="${id}"]`).checked = true;
+    element<HTMLElement>('#avatar-name').textContent = avatar.name;
+    element<HTMLElement>('#artwork-caption').textContent = avatar.caption;
+    element<HTMLCanvasElement>('#canvas').setAttribute('aria-label', avatar.description);
+    artworkStatus.hidden = true;
+    const url = new URL(window.location.href);
+    url.searchParams.set('avatar', id);
+    window.history.replaceState(null, '', url);
+    // Storage can be unavailable in browser sources; the URL still preserves the choice.
+    try { localStorage.setItem('voxflare-avatar', id); } catch { /* Keep the current selection in memory. */ }
+  } catch (error: unknown) {
+    if (request !== avatarRequest) return;
+    element<HTMLInputElement>(`input[name="avatar"][value="${activeAvatar}"]`).checked = true;
+    artworkStatus.textContent = `Could not load ${avatar.name}. Try selecting it again. WebGL 2 must be enabled.`;
+    console.error(error);
+  }
+}
+
+for (const option of document.querySelectorAll<HTMLInputElement>('input[name="avatar"]')) {
+  option.addEventListener('change', () => { if (option.checked) void selectAvatar(option.value); });
+}
+let initialAvatar = new URLSearchParams(window.location.search).get('avatar');
+if (!initialAvatar) {
+  try { initialAvatar = localStorage.getItem('voxflare-avatar'); } catch { /* Use the default when storage is unavailable. */ }
+}
+void selectAvatar(initialAvatar ?? 'plasma');
 
 const resizeObserver = new ResizeObserver(() => {
   renderer.resize(preview.clientWidth, preview.clientHeight);

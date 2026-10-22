@@ -23,6 +23,24 @@ npm run dev
 Open the local URL printed by Vite. The development view has a dark preview
 background and a settings panel; the canvas itself stays transparent.
 
+Choose **Plasma**, **ChatGPT**, or **Claude** in the **Avatar** section to compare the artwork
+with the same audio input. ChatGPT uses a white symbol and Claude an orange starburst
+over transparency. Both logos use
+40% of the plasma's perimeter distortion and 25% of its interior breathing and
+rotation. Their color and alpha are preserved without plasma lighting or glow
+correction. The selection is remembered locally; `?avatar=chatgpt`, `?avatar=claude`, or
+`?avatar=plasma` overrides it, including alongside `&overlay=1` in OBS.
+Switching avatars keeps the audio connection, playback, and motion controls running.
+
+The ChatGPT/OpenAI symbol belongs to OpenAI. The local SVG in
+`public/derived/chatgpt.svg` uses the [OpenAI symbol from Wikimedia Commons](https://commons.wikimedia.org/wiki/File:OpenAI_logo_2025_(symbol).svg),
+centered in a square canvas and rendered white for the dark preview. See
+[OpenAI's brand page](https://openai.com/brand/) for the source brand guidelines.
+
+The Claude symbol belongs to Anthropic. `public/derived/claude.svg` uses the
+[Claude symbol from Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Claude_AI_symbol.svg),
+with transparent padding added to match the other logo's size and leave room for motion.
+
 The default **Manual test** mode needs no OBS connection. Raise **Test level**
 to simulate speech, then lower it to zero to see the gradual release back to
 idle. **Flow speed** changes the rate of motion; **Speech response** changes

@@ -15,6 +15,8 @@ precision highp float;
 uniform sampler2D uArtwork;
 uniform sampler2D uDisplacements;
 uniform float uAmplitude;
+uniform float uWarpStrength;
+uniform bool uPlasma;
 uniform vec2 uInteriorTransform;
 in vec2 vPosition;
 out vec4 outColor;
@@ -25,9 +27,9 @@ void main() {
   float a = texelFetch(uDisplacements, ivec2(bin, 0), 0).r;
   float b = texelFetch(uDisplacements, ivec2(bin + 1, 0), 0).r;
   float displacement = mix(a, b, sampleIndex - float(bin));
-  // Perimeter distortion leaves the center fixed and grows smoothly toward the corona.
+  // Perimeter distortion leaves the center fixed and grows smoothly toward the artwork's edge.
   float weight = smoothstep(${FIXED_CENTER_RADIUS}, ${FULL_WARP_RADIUS}, length(vPosition));
-  vec2 sourcePosition = vPosition / (1.0 + displacement * weight);
+  vec2 sourcePosition = vPosition / (1.0 + displacement * weight * uWarpStrength);
   // Fade the interior's inverse scale/rotation to identity before the outer corona.
   float interiorWeight = 1.0 - smoothstep(0.25, 0.72, length(sourcePosition));
   vec2 interiorPosition = vec2(
@@ -40,6 +42,8 @@ void main() {
   } else {
     // The texture is premultiplied before filtering to preserve soft transparent edges.
     outColor = texture(uArtwork, sourceUV);
+    // Logos retain their original color and alpha; glow corrections belong to the plasma only.
+    if (!uPlasma) return;
     float radius = length(sourceUV * 2.0 - 1.0);
     float peak = max(outColor.r, max(outColor.g, outColor.b));
     vec3 color = outColor.rgb / max(peak, 0.0001);
@@ -84,23 +88,42 @@ export class AvatarRenderer {
   private buffer: WebGLBuffer | undefined;
   private scaleLocation: WebGLUniformLocation | null = null;
   private amplitudeLocation: WebGLUniformLocation | null = null;
+  private warpStrengthLocation: WebGLUniformLocation | null = null;
+  private plasmaLocation: WebGLUniformLocation | null = null;
   private interiorTransformLocation: WebGLUniformLocation | null = null;
   private field = new Float32Array(ANGLE_SAMPLES + 1);
   private width = 0;
   private height = 0;
   private disposed = false;
+  private loadRequest = 0;
+  private plasma = true;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
   }
 
-  async load(url: string): Promise<void> {
+  async load(url: string, plasma = true): Promise<boolean> {
+    const request = ++this.loadRequest;
     const image = new Image();
     image.src = url;
     await image.decode();
-    if (this.disposed) return;
+    // A slower previous selection must never replace the user's latest choice.
+    if (this.disposed || request !== this.loadRequest) return false;
+    if (!this.gl) {
+      this.initialize(image);
+    } else {
+      const gl = this.gl;
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, this.artwork ?? null);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+    }
+    this.plasma = plasma;
+    return true;
+  }
+
+  private initialize(image: HTMLImageElement): void {
     const gl = this.canvas.getContext('webgl2', { alpha: true, premultipliedAlpha: true, antialias: false });
-    if (!gl) throw new Error('WebGL 2 is required to animate the original artwork.');
+    if (!gl) throw new Error('WebGL 2 is required to animate the artwork.');
     this.gl = gl;
     const vertex = compileShader(gl, gl.VERTEX_SHADER, VERTEX_SHADER);
     const fragment = compileShader(gl, gl.FRAGMENT_SHADER, FRAGMENT_SHADER);
@@ -124,6 +147,8 @@ export class AvatarRenderer {
     gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
     this.scaleLocation = gl.getUniformLocation(program, 'uScale');
     this.amplitudeLocation = gl.getUniformLocation(program, 'uAmplitude');
+    this.warpStrengthLocation = gl.getUniformLocation(program, 'uWarpStrength');
+    this.plasmaLocation = gl.getUniformLocation(program, 'uPlasma');
     this.interiorTransformLocation = gl.getUniformLocation(program, 'uInteriorTransform');
 
     this.artwork = gl.createTexture() ?? undefined;
@@ -164,14 +189,17 @@ export class AvatarRenderer {
     gl.viewport(0, 0, this.canvas.width, this.canvas.height);
     gl.clear(gl.COLOR_BUFFER_BIT);
     gl.useProgram(this.program);
-    // Leave space around the original image for its displaced, feathered corona.
+    // Leave space around the artwork for its displaced perimeter and any feathered glow.
     const halfSize = Math.min(this.width, this.height) * 0.34;
     gl.uniform2f(this.scaleLocation, halfSize * WARP_EXTENT * 2 / this.width, halfSize * WARP_EXTENT * 2 / this.height);
     gl.uniform1f(this.amplitudeLocation, state.amplitude);
+    gl.uniform1f(this.warpStrengthLocation, this.plasma ? 1 : 0.4);
+    gl.uniform1i(this.plasmaLocation, this.plasma ? 1 : 0);
     // Independent slow cycles use elapsed time, never the audio-driven perimeter phase.
     // Compute trigonometry once per frame; the shader still samples the artwork only once.
-    const scale = 1 + breathingPercent / 100 * Math.sin(state.time * Math.PI * 2 / 8);
-    const rotation = -rotationDegrees * Math.PI / 180 * Math.sin(state.time * Math.PI * 2 / 14);
+    const interiorStrength = this.plasma ? 1 : 0.25;
+    const scale = 1 + interiorStrength * breathingPercent / 100 * Math.sin(state.time * Math.PI * 2 / 8);
+    const rotation = -interiorStrength * rotationDegrees * Math.PI / 180 * Math.sin(state.time * Math.PI * 2 / 14);
     gl.uniform2f(this.interiorTransformLocation, Math.cos(rotation) / scale, Math.sin(rotation) / scale);
     updateDisplacements(this.field, state);
     gl.activeTexture(gl.TEXTURE1);

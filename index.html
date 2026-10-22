@@ -8,7 +8,7 @@
   <body>
     <header class="app-header">
       <div class="brand"><span class="brand-mark" aria-hidden="true">◉</span> VoxFlare</div>
-      <span class="phase-label">Phase 02 <span>Original avatar</span></span>
+      <span class="phase-label">Audio reactive <span id="avatar-name">Plasma</span></span>
       <button id="overlay" type="button" class="quiet-button">Presentation mode <span aria-hidden="true">↗</span></button>
     </header>
     <main class="workspace">
@@ -16,9 +16,30 @@
         <div class="preview-heading"><span class="eyebrow">Live preview</span><span id="preview-status">Manual test</span></div>
         <canvas id="canvas" aria-label="Original plasma avatar with an audio-reactive red corona"></canvas>
         <p id="artwork-status" class="artwork-status" role="status">Loading avatar…</p>
-        <div class="preview-caption"><span>Voice into light.</span><small>Original artwork / 02</small></div>
+        <div class="preview-caption"><span>Voice into light.</span><small id="artwork-caption">Original plasma artwork</small></div>
       </section>
       <aside class="panel" aria-label="Avatar settings">
+        <section class="panel-section">
+          <div class="section-heading"><h2 id="avatar-heading">Avatar</h2><span class="section-number">00</span></div>
+          <div class="avatar-options" role="radiogroup" aria-labelledby="avatar-heading" aria-describedby="avatar-help">
+            <label class="avatar-option">
+              <input type="radio" name="avatar" value="plasma" checked />
+              <img src="/derived/avatar-transparent.png" alt="" width="56" height="56" />
+              <span>Plasma<small>Original artwork</small></span>
+            </label>
+            <label class="avatar-option">
+              <input type="radio" name="avatar" value="chatgpt" />
+              <img src="/derived/chatgpt.svg" alt="" width="56" height="56" />
+              <span>ChatGPT<small>Black &amp; white</small></span>
+            </label>
+            <label class="avatar-option">
+              <input type="radio" name="avatar" value="claude" />
+              <img src="/derived/claude.svg" alt="" width="56" height="56" />
+              <span>Claude<small>Starburst</small></span>
+            </label>
+          </div>
+          <p id="avatar-help" class="help avatar-help">Same voice, a different face. Your choice is remembered.</p>
+        </section>
         <section class="panel-section">
           <div class="section-heading"><h1>Audio input</h1><span class="section-number">01</span></div>
           <label for="mode">Input mode</label>
@@ -68,7 +89,7 @@
           <input id="interior-breathing" type="range" min="0" max="12" step="0.5" value="6" aria-describedby="interior-help" />
           <div class="range-label"><label for="interior-rotation">Interior rotation</label><output id="rotation-value" for="interior-rotation">±8.0°</output></div>
           <input id="interior-rotation" type="range" min="0" max="15" step="0.5" value="8" aria-describedby="interior-help" />
-          <p id="interior-help" class="help">Slow texture movement, independent of speech and flow speed. Set either effect to zero to disable it.</p>
+          <p id="interior-help" class="help">Slow texture movement, independent of speech and flow speed. Set either effect to zero to disable it. ChatGPT and Claude use a quarter of these amounts to keep the symbols clear.</p>
         </section>
         <section class="panel-section" aria-labelledby="performance-heading">
           <div class="section-heading"><h2 id="performance-heading">Performance</h2><span class="section-number">03</span></div>
