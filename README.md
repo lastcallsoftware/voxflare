@@ -32,6 +32,20 @@ correction. The selection is remembered locally; `?avatar=chatgpt`, `?avatar=cla
 `?avatar=plasma` overrides it, including alongside `&overlay=1` in OBS.
 Switching avatars keeps the audio connection, playback, and motion controls running.
 
+Enable **Dark circular background** in the Avatar section to place an opaque
+charcoal circle behind any avatar. This keeps the white ChatGPT logo visible
+over light scenes. The circle stays still while the artwork animates, and the
+area outside it remains transparent in presentation mode. It stays round in
+wide or tall Browser Sources. Transparency is the default; add `background=dark`
+to the URL to enable the circle for a specific OBS source, for example:
+
+```text
+http://localhost:5173/?overlay=1&avatar=chatgpt&background=dark
+```
+
+The checkbox updates the current page's URL. To keep this choice after OBS
+reloads the source, include `background=dark` in its Browser Source URL.
+
 The ChatGPT/OpenAI symbol belongs to OpenAI. The local SVG in
 `public/derived/chatgpt.svg` uses the [OpenAI symbol from Wikimedia Commons](https://commons.wikimedia.org/wiki/File:OpenAI_logo_2025_(symbol).svg),
 centered in a square canvas and rendered white for the dark preview. See
@@ -83,7 +97,7 @@ If Windows cannot reach the WSL development server, run
    does not capture a microphone, route audio, or change OBS settings.
 
 **OBS sensitivity** boosts the normalized OBS level before animation smoothing,
-from 0.5× to 30× (default 6×). It changes both motion and illumination, without
+from 0.5× to 30× (default 10×). It changes both motion and illumination, without
 changing audible volume or OBS's mixer settings. Adjust it until ordinary speech
 moves VoxFlare's smoothed meter through roughly 30–80%. Reduce it if the meter
 stays at 100%, which flattens the response between syllables. The existing noise
@@ -107,7 +121,8 @@ For a local review, add the Vite URL with `?overlay=1` as an OBS Browser Source,
 for example `http://localhost:5173/?overlay=1`. Set its width and height to the
 desired scene dimensions. Keep Vite running and accessible from Windows.
 
-This mode shows only the avatar over a transparent background. To configure it
+This mode shows only the avatar, with the optional dark circle and transparency
+outside it. To configure it
 inside OBS, use the Browser Source's **Interact** window and press **Esc** to
 show the settings. Connect and select a source, then click **Presentation mode**
 or press **Esc** again. Switching modes in the same page preserves the connection.
@@ -118,11 +133,12 @@ inside the page rather than in native dropdown popups, which can fail to appear
 in OBS's Interact window. Click an option, or focus the list and use the arrow
 keys. The audio source list scrolls when needed.
 
-All settings and credentials are held in memory only. The password field is
-cleared after a successful connection. Nothing is saved to browser storage or
-placed in URL parameters; only `overlay=1` is used in the URL. Reloading the
-page, refreshing the Browser Source, or shutting it down requires configuration
-again. Leave OBS's **Shutdown source when not visible** option off if you want
+Audio and motion settings and credentials are held in memory only. The password
+field is cleared after a successful connection and is never saved to browser
+storage or placed in URL parameters. Avatar selection is remembered locally;
+`avatar`, `overlay`, and `background` can be set in the Browser Source URL.
+Reloading the page, refreshing the Browser Source, or shutting it down requires
+audio and motion configuration again. Leave OBS's **Shutdown source when not visible** option off if you want
 to keep the connection while switching scenes.
 
 ## Performance visibility

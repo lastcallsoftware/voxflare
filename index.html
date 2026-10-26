@@ -39,6 +39,8 @@
             </label>
           </div>
           <p id="avatar-help" class="help avatar-help">Same voice, a different face. Your choice is remembered.</p>
+          <label class="backdrop-option"><input id="avatar-background" type="checkbox" aria-describedby="background-help" /> Dark circular background</label>
+          <p id="background-help" class="help avatar-help">An opaque circle keeps the avatar visible over light scenes. Outside the circle stays transparent.</p>
         </section>
         <section class="panel-section">
           <div class="section-heading"><h1>Audio input</h1><span class="section-number">01</span></div>
@@ -67,8 +69,8 @@
             <p id="connection-status" class="connection-status" role="status">Disconnected</p>
             <div class="range-label"><label for="obs-source">Audio source</label><button id="refresh-sources" type="button" class="text-button" disabled>Refresh</button></div>
             <select id="obs-source" size="6" disabled><option value="">Connect to load sources</option></select>
-            <div class="range-label"><label for="obs-sensitivity">OBS sensitivity</label><output id="sensitivity-value" for="obs-sensitivity">6.0×</output></div>
-            <input id="obs-sensitivity" type="range" min="0.5" max="30" step="0.5" value="6" aria-describedby="sensitivity-help" />
+            <div class="range-label"><label for="obs-sensitivity">OBS sensitivity</label><output id="sensitivity-value" for="obs-sensitivity">10.0×</output></div>
+            <input id="obs-sensitivity" type="range" min="0.5" max="30" step="0.5" value="10" aria-describedby="sensitivity-help" />
             <p id="sensitivity-help" class="help">Boost the avatar's response without changing playback volume. Aim for speech to move the smoothed level through roughly 30–80%. Lower sensitivity if it stays at 100%.</p>
             <p id="connection-help" class="help">Select an active audio input. Settings stay in this page until reload; the password is never saved.</p>
           </form>

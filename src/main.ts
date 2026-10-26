@@ -184,6 +184,17 @@ window.addEventListener('keydown', (event) => {
 });
 applyOverlay();
 
+const background = element<HTMLInputElement>('#avatar-background');
+background.checked = new URLSearchParams(window.location.search).get('background') === 'dark';
+preview.classList.toggle('has-backdrop', background.checked);
+background.addEventListener('change', () => {
+  preview.classList.toggle('has-backdrop', background.checked);
+  const url = new URL(window.location.href);
+  if (background.checked) url.searchParams.set('background', 'dark');
+  else url.searchParams.delete('background');
+  window.history.replaceState(null, '', url);
+});
+
 const artworkStatus = element<HTMLElement>('#artwork-status');
 const avatars = {
   plasma: { url: '/derived/avatar-transparent.png', name: 'Plasma', caption: 'Original plasma artwork', description: 'Original plasma avatar with an audio-reactive red corona' },
