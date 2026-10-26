@@ -15,9 +15,11 @@ export class RecordingInput {
   private analyser: AnalyserNode | undefined;
   private samples = new Float32Array(2048);
   private objectUrl: string | undefined;
+  private sampleUrl: string;
 
-  constructor(media: HTMLAudioElement) {
+  constructor(media: HTMLAudioElement, sampleUrl = './voice-sample.mp3') {
     this.media = media;
+    this.sampleUrl = sampleUrl;
   }
 
   async resume(): Promise<void> {
@@ -39,7 +41,7 @@ export class RecordingInput {
     this.media.pause();
     if (this.objectUrl) URL.revokeObjectURL(this.objectUrl);
     this.objectUrl = file ? URL.createObjectURL(file) : undefined;
-    this.media.src = this.objectUrl ?? '/voice-sample.mp3';
+    this.media.src = this.objectUrl ?? this.sampleUrl;
     this.media.load();
   }
 

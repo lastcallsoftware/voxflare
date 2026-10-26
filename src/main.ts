@@ -1,8 +1,12 @@
 import './style.css';
-import { ObsAudioInput } from './audio';
+import { ObsAudioInput, ObsAuthenticationError, validateObsAddress } from './audio';
 import { AnimationEngine } from './animation';
 import { AvatarRenderer } from './renderer';
 import { RecordingInput } from './recording';
+import { assetUrl } from './assets';
+import { rememberLocalSettings } from './local-settings';
+import { readObsConnection, saveObsConnection, forgetObsConnection, matchesObsAddress } from './obs-credentials';
+import type { SavedObsConnection } from './obs-credentials';
 
 function element<T extends HTMLElement>(selector: string): T {
   const result = document.querySelector<T>(selector);
@@ -20,7 +24,9 @@ const recordingControls = element<HTMLElement>('#recording-controls');
 const recordingMedia = element<HTMLAudioElement>('#recording');
 const recordingFile = element<HTMLInputElement>('#recording-file');
 const recordingStatus = element<HTMLElement>('#recording-status');
-const recording = new RecordingInput(recordingMedia);
+const sampleUrl = assetUrl('voice-sample.mp3');
+recordingMedia.src = sampleUrl;
+const recording = new RecordingInput(recordingMedia, sampleUrl);
 const obsControls = element<HTMLFormElement>('#obs-controls');
 const address = element<HTMLInputElement>('#obs-address');
 const password = element<HTMLInputElement>('#obs-password');
@@ -41,6 +47,21 @@ const audioValue = element<HTMLOutputElement>('#audio-value');
 const frameRate = element<HTMLElement>('#frame-rate');
 const averageWork = element<HTMLElement>('#average-work');
 const peakWork = element<HTMLElement>('#peak-work');
+let preferredSource = '';
+const localPackage = document.documentElement.dataset.localPackage === '1';
+const rememberPassword = element<HTMLInputElement>('#remember-password');
+const forgetPassword = element<HTMLButtonElement>('#forget-password');
+const savedPasswordStatus = element<HTMLElement>('#saved-password-status');
+const credentialKey = `voxflare-obs-connection:${window.location.pathname}`;
+let credentialStorage: Storage | undefined;
+if (localPackage) {
+  element<HTMLElement>('#saved-connection-controls').hidden = false;
+  try { credentialStorage = localStorage; } catch { /* A manual connection still works without storage. */ }
+}
+let savedConnection: SavedObsConnection | undefined;
+let authenticatedConnection: SavedObsConnection | undefined;
+let autoConnectPaused = false;
+let reconnectTimer: number | undefined;
 
 const audio = new ObsAudioInput((state, message) => {
   const busy = state === 'connecting';
@@ -52,8 +73,26 @@ const audio = new ObsAudioInput((state, message) => {
   password.disabled = busy || connected;
   sources.disabled = !connected;
   refresh.disabled = !connected;
+  if (state === 'disconnected') scheduleReconnect();
+  else cancelReconnect();
   updatePreviewStatus();
 });
+
+function cancelReconnect(): void {
+  window.clearTimeout(reconnectTimer);
+  reconnectTimer = undefined;
+}
+
+function scheduleReconnect(delay = 3000): void {
+  if (reconnectTimer !== undefined || !localPackage || !rememberPassword.checked || autoConnectPaused ||
+      mode.value !== 'obs' || !matchesObsAddress(savedConnection, address.value.trim())) return;
+  reconnectTimer = window.setTimeout(() => {
+    reconnectTimer = undefined;
+    if (audio.state === 'disconnected') void connectObs(true);
+  }, delay);
+  disconnect.disabled = false;
+  status.textContent = 'Waiting to reconnect to OBS automatically…';
+}
 
 function updatePreviewStatus(): void {
   if (mode.value === 'recording') {
@@ -69,8 +108,14 @@ mode.addEventListener('change', () => {
   recordingControls.hidden = mode.value !== 'recording';
   obsControls.hidden = mode.value !== 'obs';
   if (mode.value !== 'recording') recordingMedia.pause();
+  if (mode.value !== 'obs') cancelReconnect();
+  else if (audio.state === 'disconnected') scheduleReconnect();
   updatePreviewStatus();
 });
+if (document.documentElement.dataset.inputMode === 'obs') {
+  mode.value = 'obs';
+  mode.dispatchEvent(new Event('change'));
+}
 
 recordingFile.addEventListener('change', () => {
   const file = recordingFile.files?.[0];
@@ -107,26 +152,107 @@ recordingMedia.addEventListener('error', () => {
 });
 
 function showSources(names: string[]): void {
-  const previous = sources.value;
+  const previous = sources.value || preferredSource;
   sources.replaceChildren(new Option('Select an audio source', ''));
   for (const name of names) sources.add(new Option(name, name));
   sources.value = names.includes(previous) ? previous : '';
   audio.selectSource(sources.value);
 }
 
-obsControls.addEventListener('submit', async (event) => {
-  event.preventDefault();
+function persistConnection(connection: SavedObsConnection): void {
+  if (saveObsConnection(credentialStorage, credentialKey, connection)) {
+    savedConnection = connection;
+    forgetPassword.disabled = false;
+    password.placeholder = 'Saved password';
+    savedPasswordStatus.textContent = 'Password saved in this browser profile. Automatic connection is enabled.';
+  } else {
+    rememberPassword.checked = false;
+    savedPasswordStatus.textContent = 'Could not save the password. Enter it again after a reload.';
+  }
+}
+
+async function connectObs(automatic = false): Promise<void> {
+  if (audio.state !== 'disconnected') return;
+  if (automatic && (mode.value !== 'obs' || autoConnectPaused || !rememberPassword.checked ||
+      !matchesObsAddress(savedConnection, address.value.trim()))) return;
+  cancelReconnect();
+  autoConnectPaused = false;
+  // A password typed by the user takes precedence; saved credentials stay bound to their endpoint.
+  const connection = {
+    address: address.value.trim(),
+    password: password.value || (localPackage && rememberPassword.checked &&
+      matchesObsAddress(savedConnection, address.value.trim()) ? savedConnection!.password : ''),
+  };
   try {
-    showSources(await audio.connect(address.value.trim(), password.value));
-    // Keep credentials in memory only; clear the form after authentication.
+    showSources(await audio.connect(connection.address, connection.password));
+    authenticatedConnection = { ...connection, address: validateObsAddress(connection.address) };
+    if (localPackage && rememberPassword.checked) persistConnection(authenticatedConnection);
+    // Clear the field after authentication; persistent storage requires the explicit local-package opt-in.
     password.value = '';
   } catch (error) {
     status.textContent = error instanceof Error ? error.message : 'Connection failed.';
+    if (error instanceof ObsAuthenticationError) {
+      autoConnectPaused = true;
+      cancelReconnect();
+      savedPasswordStatus.textContent = 'Authentication failed. Enter the current password and connect again.';
+      disconnect.disabled = true;
+    } else if (automatic) {
+      scheduleReconnect();
+    }
   }
+}
+
+obsControls.addEventListener('submit', (event) => {
+  event.preventDefault();
+  void connectObs();
 });
 
-disconnect.addEventListener('click', () => audio.disconnect());
-sources.addEventListener('change', () => audio.selectSource(sources.value));
+disconnect.addEventListener('click', () => {
+  autoConnectPaused = true;
+  cancelReconnect();
+  audio.disconnect();
+});
+function forgetSavedPassword(): void {
+  autoConnectPaused = true;
+  cancelReconnect();
+  authenticatedConnection = undefined;
+  if (forgetObsConnection(credentialStorage, credentialKey)) {
+    savedConnection = undefined;
+    rememberPassword.checked = false;
+    forgetPassword.disabled = true;
+    password.placeholder = '';
+    savedPasswordStatus.textContent = 'Saved password removed. Automatic connection is off.';
+  } else {
+    rememberPassword.checked = savedConnection !== undefined;
+    savedPasswordStatus.textContent = 'Could not remove the saved password. Browser storage is unavailable; try Forget again.';
+  }
+  disconnect.disabled = audio.state !== 'connected';
+}
+forgetPassword.addEventListener('click', () => {
+  password.value = '';
+  forgetSavedPassword();
+});
+rememberPassword.addEventListener('change', () => {
+  if (!localPackage) return;
+  if (!rememberPassword.checked) {
+    forgetSavedPassword();
+  } else {
+    autoConnectPaused = false;
+    if (audio.state === 'connected' && authenticatedConnection) persistConnection(authenticatedConnection);
+    else savedPasswordStatus.textContent = 'Connect successfully to save this password and enable automatic connection.';
+  }
+});
+address.addEventListener('change', () => {
+  cancelReconnect();
+  if (savedConnection && !matchesObsAddress(savedConnection, address.value.trim())) {
+    password.placeholder = '';
+    savedPasswordStatus.textContent = 'The saved password belongs to another OBS address. Enter a password to connect here.';
+  }
+});
+sources.addEventListener('change', () => {
+  preferredSource = sources.value;
+  audio.selectSource(sources.value);
+});
 refresh.addEventListener('click', async () => {
   refresh.disabled = true;
   try {
@@ -161,7 +287,8 @@ rotation.addEventListener('input', () => {
   element<HTMLOutputElement>('#rotation-value').value = `±${Number(rotation.value).toFixed(1)}°`;
 });
 
-let overlay = new URLSearchParams(window.location.search).get('overlay') === '1';
+let overlay = (new URLSearchParams(window.location.search).get('overlay') ??
+  document.documentElement.dataset.overlay) === '1';
 function applyOverlay(): void {
   document.body.classList.toggle('overlay', overlay);
   element<HTMLElement>('.app-header').hidden = overlay;
@@ -197,10 +324,13 @@ background.addEventListener('change', () => {
 
 const artworkStatus = element<HTMLElement>('#artwork-status');
 const avatars = {
-  plasma: { url: '/derived/avatar-transparent.png', name: 'Plasma', caption: 'Original plasma artwork', description: 'Original plasma avatar with an audio-reactive red corona' },
-  chatgpt: { url: '/derived/chatgpt.svg', name: 'ChatGPT', caption: 'ChatGPT / Black & white', description: 'White ChatGPT symbol with an audio-reactive perimeter' },
-  claude: { url: '/derived/claude.svg', name: 'Claude', caption: 'Claude / Starburst', description: 'Orange Claude starburst with an audio-reactive perimeter' },
+  plasma: { url: assetUrl('derived/avatar-transparent.png'), name: 'Plasma', caption: 'Original plasma artwork', description: 'Original plasma avatar with an audio-reactive red corona' },
+  chatgpt: { url: assetUrl('derived/chatgpt.svg'), name: 'ChatGPT', caption: 'ChatGPT / Black & white', description: 'White ChatGPT symbol with an audio-reactive perimeter' },
+  claude: { url: assetUrl('derived/claude.svg'), name: 'Claude', caption: 'Claude / Starburst', description: 'Orange Claude starburst with an audio-reactive perimeter' },
 };
+for (const image of document.querySelectorAll<HTMLImageElement>('img[data-asset]')) {
+  image.src = assetUrl(image.dataset.asset!);
+}
 let activeAvatar: keyof typeof avatars = 'plasma';
 let avatarRequest = 0;
 
@@ -234,11 +364,33 @@ async function selectAvatar(value: string): Promise<void> {
 for (const option of document.querySelectorAll<HTMLInputElement>('input[name="avatar"]')) {
   option.addEventListener('change', () => { if (option.checked) void selectAvatar(option.value); });
 }
-let initialAvatar = new URLSearchParams(window.location.search).get('avatar');
+let initialAvatar = new URLSearchParams(window.location.search).get('avatar') ??
+  document.documentElement.dataset.avatar;
 if (!initialAvatar) {
-  try { initialAvatar = localStorage.getItem('voxflare-avatar'); } catch { /* Use the default when storage is unavailable. */ }
+  try { initialAvatar = localStorage.getItem('voxflare-avatar') ?? undefined; } catch { /* Use the default when storage is unavailable. */ }
 }
 void selectAvatar(initialAvatar ?? 'plasma');
+
+if (localPackage) {
+  preferredSource = rememberLocalSettings();
+  mode.dispatchEvent(new Event('change'));
+  preview.classList.toggle('has-backdrop', background.checked);
+  for (const control of [sensitivity, speed, transition, response, breathing, rotation]) {
+    control.dispatchEvent(new Event('input'));
+  }
+  element<HTMLElement>('#connection-help').textContent =
+    'Settings are remembered for this entry page. Enable Remember password to connect automatically after a reload.';
+  savedConnection = readObsConnection(credentialStorage, credentialKey);
+  if (savedConnection) {
+    rememberPassword.checked = true;
+    forgetPassword.disabled = false;
+    password.placeholder = matchesObsAddress(savedConnection, address.value.trim()) ? 'Saved password' : '';
+    savedPasswordStatus.textContent = matchesObsAddress(savedConnection, address.value.trim()) ?
+      'Password saved in this browser profile. Automatic connection is enabled.' :
+      'The saved password belongs to another OBS address. Enter a password to connect here.';
+    if (mode.value === 'obs') scheduleReconnect(0);
+  }
+}
 
 const resizeObserver = new ResizeObserver(() => {
   renderer.resize(preview.clientWidth, preview.clientHeight);
@@ -263,7 +415,8 @@ function resetPerformanceSample(): void {
 document.addEventListener('visibilitychange', resetPerformanceSample);
 function frame(now: number): void {
   const workStarted = performance.now();
-  const dt = Math.min((now - previousTime) / 1000, 0.1);
+  // The first frame's timestamp can precede module initialization; never advance time backwards.
+  const dt = Math.max(0, Math.min((now - previousTime) / 1000, 0.1));
   previousTime = now;
   // Calibrate OBS independently of the full-scale manual control and bundled recording.
   // The animation envelope clamps the amplified target before smoothing motion and lighting.
@@ -302,6 +455,8 @@ frameId = requestAnimationFrame(frame);
 // Vite can replace this module while developing; release its ongoing work first.
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
+    autoConnectPaused = true;
+    cancelReconnect();
     cancelAnimationFrame(frameId);
     resizeObserver.disconnect();
     document.removeEventListener('visibilitychange', resetPerformanceSample);

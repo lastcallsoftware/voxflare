@@ -85,6 +85,11 @@ If Windows cannot reach the WSL development server, run
 
 ## Connecting to OBS
 
+To use VoxFlare without starting a development server, run `npm run build:obs`
+once and follow the [local OBS package instructions](docs/OBS-PACKAGE.md).
+The generated `obs-package/` folder includes one local entry page per avatar.
+Only development and package updates need Node.js; OBS runs the package itself.
+
 1. In OBS on Windows, open **Tools → WebSocket Server Settings**, enable the
    server, and note its port and password. VoxFlare uses WebSocket v5.
 2. Choose **OBS WebSocket** in VoxFlare. Enter the server address and password,
@@ -111,8 +116,9 @@ in WSL. A browser running inside WSL may need the Windows host's reachable IP
 instead. Use `wss://` when serving the page over HTTPS.
 
 Connection failures are shown in the panel. Connection and source-list requests
-time out after eight seconds. After a disconnect, click **Connect to OBS** to
-retry; there is no automatic reconnect in this prototype. If meter data stops
+time out after eight seconds. In the web/development version, click **Connect
+to OBS** after a disconnect to retry. The local package can reconnect automatically
+when password remembering is enabled. If meter data stops
 for 300 ms, the audio target returns to zero and the animation decays to idle.
 
 ## OBS Browser Source / presentation mode
@@ -133,13 +139,22 @@ inside the page rather than in native dropdown popups, which can fail to appear
 in OBS's Interact window. Click an option, or focus the list and use the arrow
 keys. The audio source list scrolls when needed.
 
-Audio and motion settings and credentials are held in memory only. The password
+In the web/development version, audio and motion settings and credentials are
+held in memory only. The password
 field is cleared after a successful connection and is never saved to browser
 storage or placed in URL parameters. Avatar selection is remembered locally;
 `avatar`, `overlay`, and `background` can be set in the Browser Source URL.
 Reloading the page, refreshing the Browser Source, or shutting it down requires
 audio and motion configuration again. Leave OBS's **Shutdown source when not visible** option off if you want
 to keep the connection while switching scenes.
+
+The local OBS package additionally remembers nonsecret preferences per entry
+page when browser storage is available. Its optional **Remember password on this
+PC** setting saves the password in the browser profile and connects automatically
+after reloads or OBS restarts, restoring the selected source. Remembering is off
+by default, and **Forget saved password** removes the credential. The password
+is stored unencrypted and never placed in URLs or package files. See the
+[package instructions](docs/OBS-PACKAGE.md) for connection and settings behavior.
 
 ## Performance visibility
 
@@ -166,6 +181,7 @@ visible** is enabled. WSL browser measurements do not predict Windows OBS usage.
 | `npm run dev` | Start the Vite development server. |
 | `npm run typecheck` | Check TypeScript without emitting files. |
 | `npm run build` | Check TypeScript and build into `dist/`. |
+| `npm run build:obs` | Build the portable local Browser Source package into `obs-package/`. |
 | `npm run preview` | Serve the production build locally for inspection. |
 | `npm test` | Run the animation and OBS protocol tests using Node's test runner. |
 

@@ -65,6 +65,11 @@
             <input id="obs-address" type="text" value="ws://127.0.0.1:4455" spellcheck="false" autocomplete="off" required aria-describedby="connection-help" />
             <label for="obs-password">Server password</label>
             <input id="obs-password" type="password" autocomplete="off" />
+            <div id="saved-connection-controls" hidden>
+              <label class="backdrop-option"><input id="remember-password" type="checkbox" aria-describedby="saved-password-status" /> Remember password on this PC</label>
+              <button id="forget-password" type="button" class="text-button" disabled>Forget saved password</button>
+              <p id="saved-password-status" class="help" role="status">Saves the password in this browser profile and connects automatically on startup. The stored password is unencrypted.</p>
+            </div>
             <div class="button-row"><button id="connect" type="submit" class="primary-button">Connect to OBS</button><button id="disconnect" type="button" disabled>Disconnect</button></div>
             <p id="connection-status" class="connection-status" role="status">Disconnected</p>
             <div class="range-label"><label for="obs-source">Audio source</label><button id="refresh-sources" type="button" class="text-button" disabled>Refresh</button></div>

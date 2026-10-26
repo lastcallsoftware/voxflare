@@ -2,6 +2,8 @@ import OBSWebSocket, { EventSubscription } from 'obs-websocket-js/json';
 
 type ConnectionState = 'disconnected' | 'connecting' | 'connected';
 
+export class ObsAuthenticationError extends Error {}
+
 /** OBS sends linear multipliers per channel: [magnitude, output peak, input peak]. */
 export function normalizeMeterLevel(levels: unknown): number {
   if (!Array.isArray(levels)) return 0;
@@ -99,7 +101,7 @@ export class ObsAudioInput {
       const message = code === 4009 ? 'Authentication failed. Check the server password.' :
         'Could not connect to OBS. Check the address, server settings, and password.';
       this.setState('disconnected', message);
-      throw new Error(message);
+      throw code === 4009 ? new ObsAuthenticationError(message) : new Error(message);
     }
   }
 

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
-import { ObsAudioInput, normalizeMeterLevel, validateObsAddress } from '../src/audio.ts';
+import { ObsAudioInput, ObsAuthenticationError, normalizeMeterLevel, validateObsAddress } from '../src/audio.ts';
 import { createObsServer } from './fixtures/obs-server.mjs';
 
 test('meter conversion uses output peak across channels, handles silence and malformed data', () => {
@@ -62,7 +62,8 @@ test('wrong passwords fail cleanly and a subsequent connection can succeed', asy
   const server = await createObsServer({ password: 'correct' });
   const audio = new ObsAudioInput(() => {});
   t.after(async () => { audio.disconnect(); await server.close(); });
-  await assert.rejects(audio.connect(server.url, 'incorrect'), /Authentication failed/);
+  await assert.rejects(audio.connect(server.url, 'incorrect'), error =>
+    error instanceof ObsAuthenticationError && /Authentication failed/.test(error.message));
   assert.equal(audio.state, 'disconnected');
   await audio.connect(server.url, 'correct');
   assert.equal(audio.state, 'connected');
